@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <cassert>
 
-uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
-    return r + (uint32_t(g) << 8) + (uint32_t(b) << 16) + (uint32_t(a) << 24);
+uint32_t pack_color(uint32_t r, uint32_t g, uint32_t b, uint32_t a = 255) {
+    return r + (g << 8) + (b << 16) + (a << 24);
 }
 
 void unpack_color(uint32_t c, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
@@ -26,19 +26,48 @@ void write_ppm(const char* filename, std::vector<uint32_t>& img, size_t width, s
     ofs.close();
 }
 
-
+void draw_tile(std::vector<uint32_t>& img, int w, int h, int tx, int ty, int tw, int th, uint32_t color) {
+    for (int i = tx; i < tx+tw; ++i) {
+        for (int j = ty; j < ty+th; ++j) {
+            img[i+j*w] = color;
+        }
+    }
+}
 
 int main() {
     const size_t win_w = 512;
     const size_t win_h = 512;
-    std::vector<uint32_t> framebuffer(win_w*win_h, 255);
+    std::vector<uint32_t> framebuffer(win_w*win_h, pack_color(60,60,60));
 
-    for (int i = 0; i < win_w; i++) {
-        for (int j = 0; j < win_h; j++) {
-            uint8_t r = 255 * (i/(float)win_w);
-            uint8_t g = 255 * (j/(float)win_h);
-            uint8_t b = 0;
-            framebuffer[i+j*win_w] = pack_color(r, g, b);
+    const int map_w = 16;
+    const int map_h = 16;
+    const char map[] = "0000222222220000"\
+                       "1              0"\
+                       "1      11111   0"\
+                       "1     0        0"\
+                       "0     0  1110000"\
+                       "0     3        0"\
+                       "0   10000      0"\
+                       "0   0   11100  0"\
+                       "0   0   0      0"\
+                       "0   0   1  00000"\
+                       "0       1      0"\
+                       "2       1      0"\
+                       "0       0      0"\
+                       "0 0000000      0"\
+                       "0              0"\
+                       "0002222222200000";
+    assert(sizeof(map) == map_w*map_h+1);
+
+    int tile_w = win_w/map_w;//the width of a tile
+    int tile_h = win_h/map_h;//the height of a tile
+    for (int i = 0; i < map_w; i++) {
+        for (int j = 0; j < map_h; j++) {
+            int tile_x = i * tile_w;
+            int tile_y = j * tile_h;
+            if (map[i+j*map_w] == ' ') {
+                draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, pack_color(0,255,255));
+            }
         }
     }
 
