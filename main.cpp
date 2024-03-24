@@ -35,7 +35,7 @@ void draw_tile(std::vector<uint32_t>& img, int w, int h, int tx, int ty, int tw,
 }
 
 int main() {
-    const size_t win_w = 512;
+    const size_t win_w = 512*2;
     const size_t win_h = 512;
     std::vector<uint32_t> framebuffer(win_w*win_h, pack_color(60,60,60));
 
@@ -59,7 +59,7 @@ int main() {
                        "0002222222200000";
     assert(sizeof(map) == map_w*map_h+1);
 
-    int tile_w = win_w/map_w;//the width of a tile
+    int tile_w = win_w/(map_w*2);//the width of a tile
     int tile_h = win_h/map_h;//the height of a tile
 
     float player_x = 3.456; // player x position in map space
@@ -67,7 +67,7 @@ int main() {
     float player_a = M_PI / 2.05f; // the angle between player direction and positive x-axis
     float fov = M_PI / 3.0f;
 
-#define map2win(X) int(X*win_w/(float)map_w)
+#define map2win(X) int(X*win_w/((float)map_w*2.0f))
     for (int i = 0; i < map_w; i++) {
         for (int j = 0; j < map_h; j++) {
             int tile_x = i * tile_w;
@@ -82,12 +82,20 @@ int main() {
             //cast rays between fov
             for (int i = 0; i < 512; i++) {
                 //cast 512 rays across fov centered around player_a
-                float a = player_a - fov/2.0f + (i / 512.f) * fov;               
+                float a = player_a - fov/2.0f + (i / 512.f) * fov;
                 for (float c = 0.0; c < 20.0; c+=0.05f) {
                     float cx = player_x + c * cos(a);
                     float cy = player_y + c * sin(a);
-                    if (map[int(cx)+int(cy)*map_w] != ' ') break;
+                    //draw rays on map view (left)               
                     framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(255,255,255);
+                    //one ray generate one colum of 3D view (right)
+                    if (map[int(cx)+int(cy)*map_w] != ' ') {
+                        int l = 500.0f/c;
+                        for (int j = 0; j < l; j++) {
+                            framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = pack_color(255,255,255);
+                        }
+                        break;
+                    }
                 }
             }
         }
