@@ -61,6 +61,10 @@ int main() {
 
     int tile_w = win_w/map_w;//the width of a tile
     int tile_h = win_h/map_h;//the height of a tile
+
+    float player_x = 3.456; // player x position in map space
+    float player_y = 2.345; // player y position in map space
+
     for (int i = 0; i < map_w; i++) {
         for (int j = 0; j < map_h; j++) {
             int tile_x = i * tile_w;
@@ -68,6 +72,11 @@ int main() {
             if (map[i+j*map_w] == ' ') {
                 draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, pack_color(0,255,255));
             }
+            //draw player
+            int px = player_x * win_w / (float)map_w;
+            int py = player_y * win_h / (float)map_h;
+            draw_tile(framebuffer, win_w, win_h, px-2, py-2, 4, 4, pack_color(255,0,0));
+            // framebuffer[px + py*win_w] = pack_color(255,0,0);
         }
     }
 
