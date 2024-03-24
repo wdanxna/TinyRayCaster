@@ -64,7 +64,9 @@ int main() {
 
     float player_x = 3.456; // player x position in map space
     float player_y = 2.345; // player y position in map space
+    float player_a = M_PI / 2.05f; // the angle between player direction and positive x-axis
 
+#define map2win(X) int(X*win_w/(float)map_w)
     for (int i = 0; i < map_w; i++) {
         for (int j = 0; j < map_h; j++) {
             int tile_x = i * tile_w;
@@ -73,10 +75,16 @@ int main() {
                 draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, pack_color(0,255,255));
             }
             //draw player
-            int px = player_x * win_w / (float)map_w;
-            int py = player_y * win_h / (float)map_h;
+            int px = map2win(player_x);//player x in window space
+            int py = map2win(player_y);//player y in window space
             draw_tile(framebuffer, win_w, win_h, px-2, py-2, 4, 4, pack_color(255,0,0));
-            // framebuffer[px + py*win_w] = pack_color(255,0,0);
+            //draw line of sight
+            for (float c = 0.0; c < 20.0; c+=0.05f) {
+                float cx = player_x + c * cos(player_a);
+                float cy = player_y + c * sin(player_a);
+                if (map[int(cx)+int(cy)*map_w] != ' ') break;
+                framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(255,255,255);
+            }
         }
     }
 
