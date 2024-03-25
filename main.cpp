@@ -6,6 +6,8 @@
 #include <vector>
 #include <cstdint>
 #include <cassert>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 uint32_t pack_color(uint32_t r, uint32_t g, uint32_t b, uint32_t a = 255) {
     return r + (g << 8) + (b << 16) + (a << 24);
@@ -36,6 +38,83 @@ void draw_tile(std::vector<uint32_t>& img, int w, int h, int tx, int ty, int tw,
         }
     }
 }
+
+//The class represent a texture altas which contains a collection of images (texture). This class is responsible
+//for loading atlas from file using stb_image library, figuring out the amount of textures the atlas has and the size of
+//each texture etc. This class also provided an API that allows one to extract pixel color of specific texture in the atlas
+class TextureAtlas {
+    //w,h,c correspond to width, height and channel count of the input image file respectively.
+    //rows, cols are user provided parameters used to specify how many rows and columns
+    //the input image has, those are used to calculate the quantity and size of textures.
+    //assume all texture in a texture atlas is the same size.
+    int w,h,c,rows,cols;
+    //texture quantity
+    int tex_cnt;
+    //texture size
+    int tex_w, tex_h;
+
+    //storing input texture altas image pixel data in rgba
+    std::vector<uint32_t> data;
+
+    //load image from file and initialze all data members.
+    //the input image must have 4 channels (r,g,b,a). put
+    //asserts to check all neccesary prerequisits.
+    void load_img(const char* fname, int rows, int cols) {
+        uint8_t* img_data = stbi_load(fname, &w, &h, &c, 4);
+        assert(img_data != nullptr && "Failed to load image");
+        assert(c == 4 && "Input image must have 4 channels (RGBA)");
+        assert(rows > 0 && cols > 0 && "Rows and columns must be positive");
+        assert(w % cols == 0 && h % rows == 0 && "Image dimensions must be divisible by rows and columns");
+
+        this->rows = rows;
+        this->cols = cols;
+        tex_cnt = rows * cols;
+        tex_w = w / cols;
+        tex_h = h / rows;
+
+        data.resize(w * h);
+        for (int i = 0; i < w * h; ++i) {
+            uint8_t r = img_data[i * 4];
+            uint8_t g = img_data[i * 4 + 1];
+            uint8_t b = img_data[i * 4 + 2];
+            uint8_t a = img_data[i * 4 + 3];
+            data[i] = pack_color(r,g,b,a);
+        }
+
+        stbi_image_free(img_data);
+    }
+public:
+    TextureAtlas(const char* filename, int rows, int cols) {
+        load_img(filename, rows, cols);
+    }
+
+    size_t texture_count() {
+        return tex_cnt;
+    }
+
+    size_t texture_width() {
+        return tex_w;
+    }
+
+    size_t texture_height() {
+        return tex_h;
+    }
+
+    //return texture color by the reference parameter 'color' indexed by
+    //row(r) and column(c). the floating point numbers x, y are in range [0-1]
+    //which indicates the coordinates inside the texture.
+    uint32_t texture_color(int r, int c, float x, float y) {
+        assert(r >= 0 && r < rows && "Row index out of range");
+        assert(c >= 0 && c < cols && "Column index out of range");
+        assert(x >= 0 && x <= 1 && "x must be in range [0, 1]");
+        assert(y >= 0 && y <= 1 && "y must be in range [0, 1]");
+
+        int tex_x = static_cast<int>(x * tex_w);
+        int tex_y = static_cast<int>(y * tex_h);
+        int index = (r * tex_h + tex_y) * w + c * tex_w + tex_x;
+        return data[index];
+    }
+};
 
 int main() {
     const size_t win_w = 512*2;
@@ -69,6 +148,9 @@ int main() {
         ncolors[i] = pack_color(rand()%255, rand()%255, rand()%255);
     }
 
+    //load wall texture
+    TextureAtlas wall("walltext.png", 1, 6);
+
     int tile_w = win_w/(map_w*2);//the width of a tile
     int tile_h = win_h/map_h;//the height of a tile
 
@@ -79,7 +161,7 @@ int main() {
 
 #define map2win(X) int(X*win_w/((float)map_w*2.0f))
 
-    for (int frame = 0; frame < 360; frame++) {
+    for (int frame = 0; frame < 1; frame++) {
         std::stringstream ss;
         ss << "frame_" << std::setfill('0') << std::setw(3) << frame << ".ppm";
 
@@ -89,7 +171,7 @@ int main() {
                 int tile_x = i * tile_w;
                 int tile_y = j * tile_h;
                 if (map[i+j*map_w] != ' ') {
-                    uint32_t c = ncolors[map[i+j*map_w]-'0'];
+                    uint32_t c = wall.texture_color(0, 4, 0, 0);//ncolors[map[i+j*map_w]-'0'];
                     draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, c);
                 }
                 //draw player
