@@ -1,5 +1,8 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <chrono>
+#include <thread>
 #include <vector>
 #include <cstdint>
 #include <cassert>
@@ -59,6 +62,13 @@ int main() {
                        "0002222222200000";
     assert(sizeof(map) == map_w*map_h+1);
 
+    //randomly picking n colors;
+    srand(123456);
+    std::vector<uint32_t> ncolors(10, 0);
+    for (int i = 0; i < ncolors.size(); i++) {
+        ncolors[i] = pack_color(rand()%255, rand()%255, rand()%255);
+    }
+
     int tile_w = win_w/(map_w*2);//the width of a tile
     int tile_h = win_h/map_h;//the height of a tile
 
@@ -68,38 +78,48 @@ int main() {
     float fov = M_PI / 3.0f;
 
 #define map2win(X) int(X*win_w/((float)map_w*2.0f))
-    for (int i = 0; i < map_w; i++) {
-        for (int j = 0; j < map_h; j++) {
-            int tile_x = i * tile_w;
-            int tile_y = j * tile_h;
-            if (map[i+j*map_w] == ' ') {
-                draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, pack_color(0,220,255));
-            }
-            //draw player
-            int px = map2win(player_x);//player x in window space
-            int py = map2win(player_y);//player y in window space
-            draw_tile(framebuffer, win_w, win_h, px-2, py-2, 4, 4, pack_color(255,0,0));
-            //cast rays between fov
-            for (int i = 0; i < 512; i++) {
-                //cast 512 rays across fov centered around player_a
-                float a = player_a - fov/2.0f + (i / 512.f) * fov;
-                for (float c = 0.0; c < 20.0; c+=0.05f) {
-                    float cx = player_x + c * cos(a);
-                    float cy = player_y + c * sin(a);
-                    //draw rays on map view (left)               
-                    framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(255,255,255);
-                    //one ray generate one colum of 3D view (right)
-                    if (map[int(cx)+int(cy)*map_w] != ' ') {
-                        int l = 500.0f/c;
-                        for (int j = 0; j < l; j++) {
-                            framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = pack_color(255,255,255);
+
+    for (int frame = 0; frame < 360; frame++) {
+        std::stringstream ss;
+        ss << "frame_" << std::setfill('0') << std::setw(3) << frame << ".ppm";
+
+        player_a += 2*M_PI/360.0f;
+        for (int i = 0; i < map_w; i++) {
+            for (int j = 0; j < map_h; j++) {
+                int tile_x = i * tile_w;
+                int tile_y = j * tile_h;
+                if (map[i+j*map_w] != ' ') {
+                    uint32_t c = ncolors[map[i+j*map_w]-'0'];
+                    draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, c);
+                }
+                //draw player
+                int px = map2win(player_x);//player x in window space
+                int py = map2win(player_y);//player y in window space
+                draw_tile(framebuffer, win_w, win_h, px-2, py-2, 4, 4, pack_color(255,0,0));
+                //cast rays between fov
+                for (int i = 0; i < 512; i++) {
+                    //cast 512 rays across fov centered around player_a
+                    float a = player_a - fov/2.0f + (i / 512.f) * fov;
+                    for (float c = 0.0; c < 20.0; c+=0.01f) {
+                        float cx = player_x + c * cos(a);
+                        float cy = player_y + c * sin(a);
+                        //draw rays on map view (left)               
+                        framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(170,170,170);
+                        //one ray generate one colum of 3D view (right)
+                        if (map[int(cx)+int(cy)*map_w] != ' ') {
+                            int l = win_h/(c*cos(a-player_a));
+                            uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
+                            for (int j = 0; j < l; j++) {
+                                framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = c;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
         }
+        write_ppm(ss.str().c_str(), framebuffer, win_w, win_h);
+        std::fill(framebuffer.begin(), framebuffer.end(),  pack_color(60,60,60));
     }
 
-    write_ppm("./out.ppm", framebuffer, win_w, win_h);
 }
