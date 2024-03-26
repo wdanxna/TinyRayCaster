@@ -161,7 +161,7 @@ int main() {
 
 #define map2win(X) int(X*win_w/((float)map_w*2.0f))
 
-    for (int frame = 0; frame < 1; frame++) {
+    for (int frame = 0; frame < 360; frame++) {
         std::stringstream ss;
         ss << "frame_" << std::setfill('0') << std::setw(3) << frame << ".ppm";
 
@@ -171,7 +171,7 @@ int main() {
                 int tile_x = i * tile_w;
                 int tile_y = j * tile_h;
                 if (map[i+j*map_w] != ' ') {
-                    uint32_t c = wall.texture_color(0, 4, 0, 0);//ncolors[map[i+j*map_w]-'0'];
+                    uint32_t c = ncolors[map[i+j*map_w]-'0'];
                     draw_tile(framebuffer, win_w, win_h, tile_x, tile_y, tile_w, tile_h, c);
                 }
                 //draw player
@@ -190,8 +190,15 @@ int main() {
                         //one ray generate one colum of 3D view (right)
                         if (map[int(cx)+int(cy)*map_w] != ' ') {
                             int l = win_h/(c*cos(a-player_a));
-                            uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
+                            // uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
+                            //check which kind of wall we are hitting
+                            auto gx = cx - floor(cx);
+                            auto gy = cy - floor(cy);
+                            bool vertical = int(cx + 0.01*cos(M_PI-a)) != int(cx);
+                            float tex_x = vertical ? gy: gx;
+
                             for (int j = 0; j < l; j++) {
+                                uint32_t c = wall.texture_color(0, map[int(cx)+int(cy)*map_w]-'0', tex_x, j/(float)l);
                                 framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = c;
                             }
                             break;
