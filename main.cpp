@@ -132,9 +132,12 @@ struct Pawn {
 };
 
 void draw_sprite(std::vector<uint32_t>& img, int w, int h, std::vector<float>&depth, float dist, int tx, int ty, int tw, int th, TextureAtlas& tex, int tex_id) {
-    for (int i = tx; i < tx+tw; ++i) {
-        for (int j = ty; j < ty+th; ++j) {
-            if (i < w/2 || i >= w || j < 0 || j > h) continue;
+    auto left = std::max(w/2, std::min(tx, w));
+    auto right = std::max(w/2, std::min(w, tx+tw));
+    auto bottom = std::max(0, std::min(ty, h));
+    auto top = std::max(0, std::min(ty+th, h));
+    for (int i = left; i < right; ++i) {
+        for (int j = bottom; j < top; ++j) {
             if (depth[i-w/2] < dist) continue;//w/2 because the 3D view is on the right part
             depth[i-w/2] = dist;
             float sample_x = (i-tx)/(float)tw;
@@ -185,21 +188,21 @@ int main() {
 
     const int map_w = 16;
     const int map_h = 16;
-    const char map[] = "0000222222220000"\
+    const char map[] = "0000222322220000"\
                        "1              0"\
                        "1      11111   0"\
                        "1     0        0"\
                        "0     0  1110000"\
-                       "0     3        0"\
-                       "0   10000      0"\
-                       "0   0   11100  0"\
-                       "0   0   0      0"\
-                       "0   0   1  00000"\
-                       "0       1      0"\
-                       "2       1      0"\
-                       "0       0      0"\
-                       "0 0000000      0"\
-                       "0              0"\
+                       "5     3        0"\
+                       "5   10000      0"\
+                       "5   4   11100  0"\
+                       "5   3   0      0"\
+                       "0   4   1  00000"\
+                       "0       1      4"\
+                       "2       1      4"\
+                       "0       0      4"\
+                       "0 4000000      0"\
+                       "0              4"\
                        "0002222222200000";
     assert(sizeof(map) == map_w*map_h+1);
 
@@ -223,8 +226,12 @@ int main() {
     float player_a = M_PI / 2.05f; // the angle between player direction and positive x-axis
     float fov = M_PI / 3.0f;
 
-     std::vector<Pawn> foes = {{5, 2, &monster, 2}, {1.834, 8.765, &monster, 0}, {2.834, 6.765, &monster, 3},{5.323, 5.365, &monster, 1}, {4.123, 10.265, &monster, 1}};
-    // std::vector<Pawn> foes = {{5.323, 5.365, &monster, 1}};
+     std::vector<Pawn> foes = {
+        {5, 2, &monster, 2}, 
+        {1.834, 8.765, &monster, 0}, 
+        {2.834, 6.765, &monster, 3},
+        {5.323, 5.365, &monster, 1}, 
+        {4.123, 10.265, &monster, 1}};
 
 #define map2win(X) int(X*win_w/((float)map_w*2.0f))
 
