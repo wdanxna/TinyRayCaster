@@ -1,1 +1,1 @@
-ffmpeg -r 24 -f image2 -i frame_%03d.ppm -vcodec libx264 -crf 23 -pix_fmt yuv420p -report output.mp4
+ffmpeg -r 15 -f image2 -i frame_%03d.png -vcodec libx264 -crf 23 -pix_fmt yuv420p -report output.mp4
