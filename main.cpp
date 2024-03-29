@@ -11,6 +11,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#include <SDL2/SDL.h>
+
 
 uint32_t pack_color(uint32_t r, uint32_t g, uint32_t b, uint32_t a = 255) {
     return r + (g << 8) + (b << 16) + (a << 24);
@@ -43,6 +45,7 @@ void write_png(const char* filename, std::vector<uint32_t>& img, size_t width, s
 void draw_tile(std::vector<uint32_t>& img, int w, int h, int tx, int ty, int tw, int th, uint32_t color) {
     for (int i = tx; i < tx+tw; ++i) {
         for (int j = ty; j < ty+th; ++j) {
+            if (i < 0 || i >= w || j < 0 || j >= h) continue;
             img[i+j*w] = color;
         }
     }
@@ -165,6 +168,8 @@ void draw_foes(
         float foe_a = atan2(foe.y - player_y, foe.x - player_x);
         //the angle between player_a which is the center of the view and the foe
         float a = foe_a - player_a;
+        while (a > M_PI) a-= 2*M_PI;
+        while (a < -M_PI) a+= 2*M_PI;
         //if player_a map to the center of 3D view
         //then a is mapping to center + (a/fov)*win_w
         float offset = w/4 + a*(w/2)/fov;//offset from the center of the 3D view
@@ -214,9 +219,9 @@ int main() {
     }
 
     //load wall texture
-    TextureAtlas wall("walltext.png", 1, 6);
+    TextureAtlas wall("../walltext.png", 1, 6);
     //monster texture
-    TextureAtlas monster("monsters.png", 1, 4);
+    TextureAtlas monster("../monsters.png", 1, 4);
 
     int tile_w = win_w/(map_w*2);//the width of a tile
     int tile_h = win_h/map_h;//the height of a tile
@@ -233,16 +238,67 @@ int main() {
         {5.323, 5.365, &monster, 1}, 
         {4.123, 10.265, &monster, 1}};
 
+    
+    if (SDL_Init(SDL_INIT_VIDEO)) {
+        std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
+
+    if (SDL_CreateWindowAndRenderer(win_w, win_h, SDL_WINDOW_SHOWN | SDL_WINDOW_INPUT_FOCUS, &window, &renderer)) {
+        std::cerr << "Failed to create window and renderer: " << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    SDL_Texture *framebuffer_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
+    if (!framebuffer_texture) {
+        std::cerr << "Failed to create SDL texture: " << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    using namespace std::chrono_literals;
+    bool game_will_stop = false;
+    float player_turn = 0.0f;
+    float player_walk = 0.0f;
+
+    auto last_time = std::chrono::high_resolution_clock::now();
+    while (!game_will_stop) {
+        auto curr_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> elapsed_time = curr_time - last_time;
+        if (elapsed_time.count() < 33) {
+            std::this_thread::sleep_for(33ms - elapsed_time);
+            continue;
+        }
+        last_time = curr_time;
+        
+        { // poll events and update player's state (walk/turn flags); TODO: move this block to a more appropriate place
+            SDL_Event event;
+            if (SDL_PollEvent(&event)) {
+                if (SDL_QUIT==event.type || (SDL_KEYDOWN==event.type && SDLK_ESCAPE==event.key.keysym.sym)) {game_will_stop = true;};
+                if (SDL_KEYUP==event.type) {
+                    if ('a'==event.key.keysym.sym || 'd'==event.key.keysym.sym) player_turn = 0;
+                    if ('w'==event.key.keysym.sym || 's'==event.key.keysym.sym) player_walk = 0;
+                }
+                if (SDL_KEYDOWN==event.type) {
+                    if ('a'==event.key.keysym.sym) player_turn = -1;
+                    if ('d'==event.key.keysym.sym) player_turn =  1;
+                    if ('w'==event.key.keysym.sym) player_walk =  1;
+                    if ('s'==event.key.keysym.sym) player_walk = -1;
+                }
+            }
+        }
+        float dt = elapsed_time.count() / 1000.0f;
+        //update player position and facing
+        player_a += player_turn * dt * 2.0f;
+        while (player_a > M_PI) player_a -= 2*M_PI;
+        while (player_a < -M_PI) player_a += 2*M_PI;
+
+        player_x += player_walk * cosf(player_a) * dt * 1.5f;
+        player_y += player_walk * sinf(player_a) * dt * 1.5f;
 #define map2win(X) int(X*win_w/((float)map_w*2.0f))
-
-    for (int frame = 0; frame < 180; frame++) {
-        std::stringstream ss;
-        ss << "frame_" << std::setfill('0') << std::setw(3) << frame << ".png";
-
-        player_a += 2*M_PI/180.0f;
-        while (player_a > M_PI) player_a-=2*M_PI;
-        while (player_a < -M_PI) player_a+=2*M_PI;
-
+        //render
         for (int i = 0; i < map_w; i++) {
             for (int j = 0; j < map_h; j++) {
                 int tile_x = i * tile_w;
@@ -255,42 +311,54 @@ int main() {
                 int px = map2win(player_x);//player x in window space
                 int py = map2win(player_y);//player y in window space
                 draw_tile(framebuffer, win_w, win_h, px-2, py-2, 4, 4, pack_color(255,0,0));
-                //cast rays between fov
-                for (int i = 0; i < 512; i++) {
-                    //cast 512 rays across fov centered around player_a
-                    float a = player_a - fov/2.0f + (i / 512.f) * fov;
-                    for (float c = 0.0; c < 20.0; c+=0.01f) {
-                        float cx = player_x + c * cos(a);
-                        float cy = player_y + c * sin(a);
-                        //draw rays on map view (left)               
-                        framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(170,170,170);
-                        //one ray generate one colum of 3D view (right)
-                        if (map[int(cx)+int(cy)*map_w] != ' ') {
-                            float dist = c*cos(a-player_a);
-                            depth[i] = dist;
-                            int l = win_h/dist;
-                            // uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
-                            //check which kind of wall we are hitting
-                            auto gx = cx - floor(cx);
-                            auto gy = cy - floor(cy);
-                            bool vertical = int(cx + 0.01*cos(M_PI-a)) != int(cx);
-                            float tex_x = vertical ? gy: gx;
-
-                            for (int j = 0; j < l; j++) {
-                                uint32_t c = wall.texture_color(0, map[int(cx)+int(cy)*map_w]-'0', tex_x, j/(float)l);
-                                framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = c;
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                draw_foes(framebuffer, win_w, win_h, depth, foes, player_x, player_y, fov, player_a);
             }
         }
-        write_png(ss.str().c_str(), framebuffer, win_w, win_h);
+
+        //cast rays between fov
+        for (int i = 0; i < 512; i++) {
+            //cast 512 rays across fov centered around player_a
+            float a = player_a - fov/2.0f + (i / 512.f) * fov;
+            for (float c = 0.01/*prevent divide by 0 */; c < 20.0; c+=0.01f) {
+                float cx = player_x + c * cos(a);
+                float cy = player_y + c * sin(a);
+                //draw rays on map view (left)               
+                framebuffer[map2win(cx) + map2win(cy)*win_w] = pack_color(170,170,170);
+                //one ray generate one colum of 3D view (right)
+                if (map[int(cx)+int(cy)*map_w] != ' ') {
+                    float dist = c*cos(a-player_a);
+                    depth[i] = dist;
+                    int l = std::min(2000, int(win_h/dist));//prevent the l goes extremly big
+                    // uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
+                    //check which kind of wall we are hitting
+                    auto gx = cx - floor(cx);
+                    auto gy = cy - floor(cy);
+                    bool vertical = int(cx + 0.01*cos(M_PI-a)) != int(cx);
+                    float tex_x = vertical ? gy: gx;
+
+                    for (int j = 0; j < l; j++) {
+                        if ((win_h/2 - l/2 + j) >= win_h) continue;
+                        uint32_t c = wall.texture_color(0, map[int(cx)+int(cy)*map_w]-'0', tex_x, j/(float)l);
+                        framebuffer[win_w/2 + i + (win_h/2 - l/2 + j)*win_w] = c;
+                    }
+                    break;
+                }
+            }
+        }
+        draw_foes(framebuffer, win_w, win_h, depth, foes, player_x, player_y, fov, player_a);
+
+        SDL_UpdateTexture(framebuffer_texture, NULL, reinterpret_cast<void*>(framebuffer.data()), win_w*4);
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, framebuffer_texture, NULL, NULL);
+        SDL_RenderPresent(renderer);
+
         std::fill(framebuffer.begin(), framebuffer.end(),  pack_color(60,60,60));
         std::fill(depth.begin(), depth.end(),  10000.0f);
     }
+
+    SDL_DestroyTexture(framebuffer_texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
 
 }
