@@ -24,23 +24,6 @@ void unpack_color(uint32_t c, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) {
     b = uint8_t((c >> 16) & 255);
     a = uint8_t((c >> 24) & 255);
 }
-void write_ppm(const char* filename, std::vector<uint32_t>& img, size_t width, size_t height) {
-    assert(img.size() == width*height);
-    std::ofstream ofs(filename, std::ios::binary);
-    ofs << "P6\n" << width << " " << height << "\n255\n";
-    for (int i = 0; i < width*height; i++) {
-        uint8_t r,g,b,a;
-        unpack_color(img[i], r, g, b, a);
-        ofs << r << g << b;
-    }
-    ofs.close();
-}
-
-void write_png(const char* filename, std::vector<uint32_t>& img, size_t width, size_t height) {
-    if (!stbi_write_png(filename, width, height, 4, img.data(), width * 4)) {
-        assert(false);
-    }
-}
 
 void draw_tile(std::vector<uint32_t>& img, int w, int h, int tx, int ty, int tw, int th, uint32_t color) {
     for (int i = tx; i < tx+tw; ++i) {
@@ -328,7 +311,6 @@ int main() {
                     float dist = c*cos(a-player_a);
                     depth[i] = dist;
                     int l = std::min(2000, int(win_h/dist));//prevent the l goes extremly big
-                    // uint32_t c = ncolors[map[int(cx)+int(cy)*map_w]-'0'];
                     //check which kind of wall we are hitting
                     auto gx = cx - floor(cx);
                     auto gy = cy - floor(cy);
